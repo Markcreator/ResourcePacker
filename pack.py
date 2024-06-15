@@ -1,4 +1,4 @@
-from PIL import Image
+from PIL import Image, ImageOps
 import os
 import math
 import json
@@ -15,13 +15,14 @@ def is_bright_pixel(pixel, threshold=150):
 ores = ["diamond_", "emerald_", "gold_", "iron_", "lapis_", "redstone_", "quartz_"]
 glowies = ["glowstone", "lava"]
 
-def process_texture(img, offset, square_size, albedo_map, emissive_map, gloss_map, leaves_map):
-    convert = img.convert('RGBA')
+def process_texture(img, pasted, offset, square_size, albedo_map, emissive_map, gloss_map, leaves_map):
+    convert = pasted.convert('RGBA')
     grassColor = (145/255, 189/255, 89/255, 255)
     waterColor = (63/255, 118/255, 228/255, 255)
+    padding = 1
 
-    for y in range(min(img.size[1], square_size)):
-        for x in range(min(img.size[0], square_size)):
+    for y in range(min(pasted.size[1], square_size)):
+        for x in range(min(pasted.size[0], square_size)):
             pixel = convert.getpixel((x, y))
 
             for ore in ores:
@@ -44,7 +45,9 @@ def process_texture(img, offset, square_size, albedo_map, emissive_map, gloss_ma
                 if os.path.exists(overlayPath):
                     with Image.open(overlayPath) as overlay:
                         convertOverlay = overlay.convert('RGBA')
-                        overlayPixel = convertOverlay.getpixel((x, y))
+                        overlayPadded = convertOverlay.resize((pasted.size[0], pasted.size[1]))
+                        overlayPadded.paste(convertOverlay, (padding, padding))
+                        overlayPixel = overlayPadded.getpixel((x, y))
 
                         if overlayPixel[3] > 0:
                             resultPixel = tuple(int(round(c1 * c2)) for c1, c2 in zip(overlayPixel, grassColor))
@@ -84,6 +87,10 @@ def pack_png_images(input_folder, output_file, order_file, matchOrder):
     with Image.open(first_image_path) as first_image:
         # Get the size of the first image
         width, height = first_image.size
+        # Add a pixel of padding to each image
+        padding = 1
+        width += padding * 2
+        height += padding * 2
 
         # Calculate the dimensions of the square
         total_images = len(png_files)
@@ -91,6 +98,7 @@ def pack_png_images(input_folder, output_file, order_file, matchOrder):
 
         # Round up to the closest power of two
         square_size = int(math.pow(2, math.ceil(math.log2(square_size))))
+        print(square_size)
 
         # List to store the order of packed textures (without .png extension)
         order_list = []
@@ -114,14 +122,19 @@ def pack_png_images(input_folder, output_file, order_file, matchOrder):
                 row = i // square_size
                 col = i % square_size
 
+                # Crop the image to a square
+                cropped = img.crop((0, 0, width - padding * 2, height - padding * 2))
+                padded = cropped.resize((width, height))
+
                 # Paste the image into the correct position
-                albedo_map.paste(img.crop((0, 0, square_size, square_size)), (col * width, row * height))
+                padded.paste(cropped, (padding, padding))
+                albedo_map.paste(padded, (col * width, row * height))
 
                 # Add the filename (without .png extension) to the order list
                 order_list.append(os.path.splitext(png_file)[0])
 
                 # Process the texture for emissive and gloss maps
-                process_texture(img, (col * width, row * height), square_size, albedo_map, emissive_map, gloss_map, leaves_map)
+                process_texture(img, padded, (col * width, row * height), square_size, albedo_map, emissive_map, gloss_map, leaves_map)
 
         # Save the order list to a JSON file
         if not matchOrder:
@@ -132,17 +145,17 @@ def pack_png_images(input_folder, output_file, order_file, matchOrder):
         # Save maps
         albedo_map.save(output_file, "PNG")
         if not matchOrder:
-            emissive_map.save("./emissive_map.png", "PNG")
-            gloss_map.save("./gloss_map.png", "PNG")
-            leaves_map.save("./leaves_map.png", "PNG")
+            emissive_map.save("./output/emissive_map.png", "PNG")
+            gloss_map.save("./output/gloss_map.png", "PNG")
+            leaves_map.save("./output/leaves_map.png", "PNG")
         print(f"Packing complete and maps saved to {output_file}")
 
 if __name__ == "__main__":
     # Specify the input folder and output file
     input_folder = "./block"
     alternative_folder = "./blocks"
-    output_file = "./packed_image.png"
-    order_file = "./order.json"
+    output_file = "./output/packed_image.png"
+    order_file = "./output/order.json"
 
     # Check if the input folder exists, if not, try an alternative folder
     if not os.path.exists(input_folder):
@@ -160,7 +173,8 @@ if __name__ == "__main__":
         print('2) Build atlas that matches order.json')
         option = input()
 
-    print(option)
+    if not os.path.exists("./output"):
+        os.makedirs("./output")
     
     if option == "1":
         pack_png_images(input_folder, output_file, order_file, False)
