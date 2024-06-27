@@ -144,10 +144,9 @@ def pack_png_images(input_folder, output_file, order_file, matchOrder):
 
         # Save maps
         albedo_map.save(output_file, "PNG")
-        if not matchOrder:
-            emissive_map.save("./output/emissive_map.png", "PNG")
-            gloss_map.save("./output/gloss_map.png", "PNG")
-            leaves_map.save("./output/leaves_map.png", "PNG")
+        emissive_map.save("./output/emissive_map.png", "PNG")
+        gloss_map.save("./output/gloss_map.png", "PNG")
+        leaves_map.save("./output/leaves_map.png", "PNG")
         print(f"Packing complete and maps saved to {output_file}")
 
 if __name__ == "__main__":
